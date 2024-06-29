@@ -6,38 +6,58 @@ import matplotlib.colors as mcolors
 import numpy as np
 import urllib.request as request
 import random
-import cv2
 from skimage import io
 from os import listdir
 import supervision as sv
 from inference import get_model
-
+from PIL import Image
 from inference_sdk import InferenceHTTPClient
+    
+def cutImage(imageName, image, positionsToCut ):
+    for index, position in enumerate(positionsToCut):
+        cutImage = image.crop((position["x"] - position["width"]/2, position["y"] - position["height"]/2, position["x"] + position["width"] / 2, position["y"] + position["height"] / 2))
+        cutImage.save("Images-cut/" + str(index + 1) + " - " + imageName)
+      #  cutImage.show()
 
-imagesList = listdir("Images/")
-
-CLIENT = InferenceHTTPClient(
-    api_url="https://detect.roboflow.com",
-    api_key="tJeGrQHcijZ9A4T7J91p"
-)
-for image in imagesList:
-    image = cv2.imread("Images/" + image)
+def detectPuzzle(image):
     result = CLIENT.infer(image, model_id="yolo-rompecabezas/2")
-    # load the results into the supervision Detections api
-    detections = sv.Detections.from_inference(result)
+    predictions = result['predictions']
+    if len(predictions) == 1 and (predictions[0]['width'] == image.width and predictions[0]["height"] == image.height):
+        print("Puzzle not found")
+        return None
+    else:
+        # load the results into the supervision Detections api
+        detections = sv.Detections.from_inference(result)
 
-    # create supervision annotators
-    bounding_box_annotator = sv.BoundingBoxAnnotator()
-    label_annotator = sv.LabelAnnotator()
+        # create supervision annotators
+        bounding_box_annotator = sv.BoundingBoxAnnotator()
+        label_annotator = sv.LabelAnnotator()
 
-    # annotate the image with our inference results
-    annotated_image = bounding_box_annotator.annotate(
-        scene=image, detections=detections)
-    annotated_image = label_annotator.annotate(
-        scene=annotated_image, detections=detections)
+        # annotate the image with our inference results
+        annotated_image = bounding_box_annotator.annotate(
+            scene=image, detections=detections)
+        annotated_image = label_annotator.annotate(
+            scene=annotated_image, detections=detections)
+        
+        # display the image
+       # sv.plot_image(annotated_image)
+        return predictions
 
-    # display the image
-    sv.plot_image(annotated_image)
+if __name__ == "__main__":
+    imagesList = listdir("Images/")
+
+    CLIENT = InferenceHTTPClient(
+        api_url="https://detect.roboflow.com",
+        api_key="tJeGrQHcijZ9A4T7J91p"
+    )
+
+    for imageName in imagesList:
+        image = Image.open("Images/" + imageName)
+        result = detectPuzzle(image)
+        if result is not None:
+            cutImage(imageName, image, result)
+
+
 # tensors = []
 # preprocess = transforms.Compose([transforms.ToTensor()])
 
